@@ -3,252 +3,110 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مقيم القراءة الاحترافي - النسخة العالية الدقة</title>
+    <title>مقيم القراءة المستقل</title>
+    <link rel="manifest" href="manifest.json">
     <style>
-        :root {
-            --primary: #2563eb;
-            --success: #22c55e;
-            --danger: #ef4444;
-            --bg: #f8fafc;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .container {
-            background: white;
-            width: 90%;
-            max-width: 600px;
-            padding: 40px 20px;
-            border-radius: 30px;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1);
-            text-align: center;
-            position: relative;
-        }
-        #status-container {
-            margin-bottom: 20px;
-        }
-        #status-text {
-            font-size: 0.85em;
-            color: #64748b;
-            margin-bottom: 8px;
-        }
-        .progress-wrapper {
-            height: 8px;
-            background: #e2e8f0;
-            border-radius: 10px;
-            overflow: hidden;
-            display: none;
-        }
-        #progress-bar {
-            height: 100%;
-            width: 0%;
-            background: var(--primary);
-            transition: width 0.3s ease;
-        }
-        #display-text {
-            font-size: 2.2em;
-            line-height: 1.5;
-            margin: 30px 0;
-            color: #1e293b;
-            font-weight: bold;
-        }
-        .word {
-            display: inline-block;
-            margin: 0 5px;
-            color: #cbd5e1;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
-        .word.correct { color: var(--success); transform: scale(1.1); }
-        .word.wrong { color: var(--danger); text-decoration: line-through; opacity: 0.7; }
-        
-        #record-btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 20px 50px;
-            font-size: 1.3em;
-            border-radius: 100px;
-            cursor: pointer;
-            width: 100%;
-            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
-            transition: all 0.3s;
-        }
-        #record-btn:disabled { background: #94a3b8; box-shadow: none; }
-        #record-btn.recording { background: var(--danger); animation: pulse 1.5s infinite; }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        #transcript-view {
-            margin-top: 25px;
-            font-size: 1em;
-            color: #475569;
-            min-height: 25px;
-            border-top: 1px solid #f1f5f9;
-            padding-top: 15px;
-        }
+        :root { --primary: #2563eb; --success: #22c55e; --danger: #ef4444; }
+        body { font-family: sans-serif; background: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .container { background: white; width: 90%; max-width: 500px; padding: 30px; border-radius: 25px; box-shadow: 0 15px 35px rgba(0,0,0,0.1); text-align: center; }
+        #display-text { font-size: 1.8em; margin: 20px 0; color: #1e293b; }
+        .word { display: inline-block; margin: 0 4px; color: #cbd5e1; transition: 0.3s; }
+        .word.correct { color: var(--success); font-weight: bold; }
+        .word.wrong { color: var(--danger); text-decoration: line-through; }
+        button { background: var(--primary); color: white; border: none; padding: 15px 30px; font-size: 1.1em; border-radius: 50px; cursor: pointer; width: 100%; transition: 0.3s; }
+        button:disabled { background: #94a3b8; }
+        #status { font-size: 0.8em; color: #64748b; margin-top: 10px; }
+        .progress-bar { height: 4px; background: #e2e8f0; border-radius: 2px; margin: 10px 0; display: none; }
+        #fill { height: 100%; background: var(--primary); width: 0%; transition: 0.2s; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="status-container">
-        <div id="status-text">جاري استدعاء الذكاء الاصطناعي (Whisper Base)...</div>
-        <div class="progress-wrapper" id="progress-wrapper">
-            <div id="progress-bar"></div>
-        </div>
-    </div>
-
-    <div id="display-text"></div>
-
-    <button id="record-btn" disabled>انتظر تحميل المحرك...</button>
+    <div id="status">جاري تهيئة النظام...</div>
+    <div class="progress-bar" id="p-bar"><div id="fill"></div></div>
     
-    <div id="transcript-view"></div>
+    <div id="display-text"></div>
+    <button id="record-btn" disabled>انتظر التحميل...</button>
+    <p id="live-note" style="font-size: 0.8em; color: #666;"></p>
 </div>
 
 <script type="module">
     import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
 
-    // النص المراد قراءته
-    const targetSentence = "الحلم هو بداية كل انجاز عظيم";
-    const wordsArray = targetSentence.split(' ');
-    
-    const displayText = document.getElementById('display-text');
-    const recordBtn = document.getElementById('record-btn');
-    const statusText = document.getElementById('status-text');
-    const progressBar = document.getElementById('progress-bar');
-    const progressWrapper = document.getElementById('progress-wrapper');
-    const transcriptView = document.getElementById('transcript-view');
+    // تسجيل الخدمة للعمل أوفلاين
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js');
+    }
 
-    let transcriber;
-    let isRecording = false;
+    const text = "الحلم هو بداية كل انجاز عظيم";
+    const words = text.split(' ');
+    const display = document.getElementById('display-text');
+    const btn = document.getElementById('record-btn');
+    const status = document.getElementById('status');
+    const fill = document.getElementById('fill');
+    const pBar = document.getElementById('p-bar');
 
-    // تهيئة عرض الكلمات
-    wordsArray.forEach((word, i) => {
-        const span = document.createElement('span');
-        span.innerText = word;
-        span.className = 'word';
-        span.id = `w-${i}`;
-        displayText.appendChild(span);
+    words.forEach((w, i) => {
+        const s = document.createElement('span');
+        s.innerText = w; s.className = 'word'; s.id = `w-${i}`;
+        display.appendChild(s);
     });
 
-    // تحميل المحرك العالي الدقة (Base)
-    async function loadEngine() {
-        progressWrapper.style.display = 'block';
+    let transcriber;
+    async function init() {
+        pBar.style.display = 'block';
         try {
-            // استخدام النسخة base التي تدعم العربية بشكل أفضل بمراحل
             transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
                 progress_callback: (p) => {
-                    if (p.status === 'progress') {
-                        progressBar.style.width = p.progress + '%';
-                        statusText.innerText = `جاري تحميل الدماغ الآلي: ${Math.round(p.progress)}%`;
+                    if(p.status === 'progress') {
+                        fill.style.width = p.progress + '%';
+                        status.innerText = `تحميل الذكاء الاصطناعي: ${Math.round(p.progress)}%`;
                     }
-                    if (p.status === 'ready') {
-                        statusText.innerText = "✅ المحرك القوي جاهز للعمل";
-                        statusText.style.color = "#16a34a";
-                        recordBtn.disabled = false;
-                        recordBtn.innerText = "ابدأ القراءة";
-                        progressWrapper.style.display = 'none';
+                    if(p.status === 'ready') {
+                        status.innerText = "✅ جاهز تماماً (أوفلاين)";
+                        pBar.style.display = 'none';
+                        btn.disabled = false; btn.innerText = "ابدأ القراءة";
                     }
                 }
             });
-        } catch (e) {
-            statusText.innerText = "❌ حدث خطأ أثناء التحميل. تأكد من اتصال الإنترنت.";
-        }
+        } catch (e) { status.innerText = "خطأ في التحميل"; }
     }
-    loadEngine();
+    init();
 
-    let mediaRecorder;
-    recordBtn.onclick = async () => {
-        if (isRecording) {
-            mediaRecorder.stop();
-            return;
-        }
-
+    let recorder;
+    btn.onclick = async () => {
+        if (btn.innerText === "توقف") { recorder.stop(); return; }
+        
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        let audioChunks = [];
-
-        mediaRecorder.onstart = () => {
-            isRecording = true;
-            recordBtn.innerText = "اسمعك.. اضغط عند الانتهاء";
-            recordBtn.classList.add('recording');
-            resetWords();
+        recorder = new MediaRecorder(stream);
+        let chunks = [];
+        
+        recorder.onstart = () => {
+            btn.innerText = "توقف";
+            btn.style.background = "var(--danger)";
+            document.querySelectorAll('.word').forEach(w => w.className = 'word');
         };
 
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        
-        mediaRecorder.onstop = async () => {
-            isRecording = false;
-            recordBtn.innerText = "جاري التقييم الاحترافي...";
-            recordBtn.classList.remove('recording');
-            recordBtn.disabled = true;
-
-            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-            const audioUrl = URL.createObjectURL(audioBlob);
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = async () => {
+            btn.disabled = true; btn.innerText = "جاري التحليل...";
+            const blob = new Blob(chunks, { type: 'audio/wav' });
+            const out = await transcriber(URL.createObjectURL(blob), { language: 'arabic', task: 'transcribe' });
             
-            // معالجة الصوت بالنموذج الأقوى
-            const output = await transcriber(audioUrl, { 
-                language: 'arabic',
-                task: 'transcribe'
+            const spoken = out.text.replace(/[^\u0621-\u064A\s]/g, "").split(/\s+/);
+            words.forEach((w, i) => {
+                const el = document.getElementById(`w-${i}`);
+                const match = spoken.some(s => s.includes(w.replace(/[إأآا]/g, "ا")) || w.includes(s));
+                el.className = match ? 'word correct' : 'word wrong';
             });
 
-            processFinalResult(output.text);
+            btn.disabled = false; btn.innerText = "إعادة المحاولة"; btn.style.background = "var(--primary)";
+            document.getElementById('live-note').innerText = "سمعت: " + out.text;
         };
-
-        mediaRecorder.start();
+        recorder.start();
     };
-
-    function processFinalResult(rawText) {
-        transcriptView.innerHTML = `سمعت: <span style="color:var(--primary)">"${rawText}"</span>`;
-        
-        const spokenWords = normalizeText(rawText).split(/\s+/);
-        
-        wordsArray.forEach((originalWord, index) => {
-            const wordEl = document.getElementById(`w-${index}`);
-            const normOriginal = normalizeText(originalWord);
-            
-            // البحث عن تطابق أو تقارب (Fuzzy Match)
-            const isMatch = spokenWords.some(sw => {
-                const s = normalizeText(sw);
-                return s === normOriginal || s.includes(normOriginal) || normOriginal.includes(s);
-            });
-
-            if (isMatch) {
-                wordEl.classList.add('correct');
-            } else {
-                wordEl.classList.add('wrong');
-            }
-        });
-
-        recordBtn.disabled = false;
-        recordBtn.innerText = "حاول مرة أخرى";
-    }
-
-    function normalizeText(t) {
-        return t.toLowerCase()
-                .replace(/[إأآا]/g, "ا")
-                .replace(/ة/g, "ه")
-                .replace(/ى/g, "ي")
-                .replace(/[^\u0621-\u064A]/g, "") // حذف كل الرموز غير العربية
-                .trim();
-    }
-
-    function resetWords() {
-        document.querySelectorAll('.word').forEach(w => w.className = 'word');
-        transcriptView.innerText = "";
-    }
 </script>
-
 </body>
 </html>
 

@@ -1,0 +1,17 @@
+{
+  "name": "مقيم القراءة الذكي",
+  "short_name": "قراءتي",
+  "description": "تطبيق لتقييم القراءة يعمل بالذكاء الاصطناعي أوفلاين",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1041/1041883.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
+
