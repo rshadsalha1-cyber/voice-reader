@@ -3,142 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مقيم القراءة الاحترافي اللحظي</title>
+    <title>مقيم القراءة الاحترافي - النسخة العالية الدقة</title>
     <style>
         :root {
             --primary: #2563eb;
             --success: #22c55e;
             --danger: #ef4444;
-            --text-main: #1e293b;
+            --bg: #f8fafc;
         }
         body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
-            background: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
             display: flex;
             justify-content: center;
-            padding: 20px;
-            margin: 0;
+            align-items: center;
+            min-height: 100vh;
         }
         .container {
             background: white;
+            width: 90%;
             max-width: 600px;
-            width: 100%;
-            padding: 30px;
-            border-radius: 24px;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+            padding: 40px 20px;
+            border-radius: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1);
             text-align: center;
+            position: relative;
         }
-        #status-badge {
-            display: inline-block;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.8em;
+        #status-container {
             margin-bottom: 20px;
-            background: #fee2e2;
-            color: #991b1b;
+        }
+        #status-text {
+            font-size: 0.85em;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+        .progress-wrapper {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            display: none;
+        }
+        #progress-bar {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.3s ease;
         }
         #display-text {
-            font-size: 28px;
-            line-height: 1.6;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f1f5f9;
-            border-radius: 15px;
-            min-height: 100px;
+            font-size: 2.2em;
+            line-height: 1.5;
+            margin: 30px 0;
+            color: #1e293b;
+            font-weight: bold;
         }
         .word {
             display: inline-block;
-            margin: 0 4px;
-            color: #94a3b8; /* اللون الافتراضي رمادي قبل القراءة */
-            transition: all 0.2s ease;
+            margin: 0 5px;
+            color: #cbd5e1;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
-        .word.correct { color: var(--success); font-weight: bold; transform: scale(1.1); }
-        .word.wrong { color: var(--danger); text-decoration: underline; }
-        .word.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
-
-        button {
+        .word.correct { color: var(--success); transform: scale(1.1); }
+        .word.wrong { color: var(--danger); text-decoration: line-through; opacity: 0.7; }
+        
+        #record-btn {
             background: var(--primary);
             color: white;
             border: none;
-            padding: 18px 40px;
-            font-size: 1.2em;
-            border-radius: 15px;
+            padding: 20px 50px;
+            font-size: 1.3em;
+            border-radius: 100px;
             cursor: pointer;
             width: 100%;
-            font-weight: bold;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3);
+            transition: all 0.3s;
         }
-        button:disabled { background: #cbd5e1; }
-        #live-transcript {
-            margin-top: 20px;
-            font-size: 0.9em;
-            color: #64748b;
-            font-style: italic;
+        #record-btn:disabled { background: #94a3b8; box-shadow: none; }
+        #record-btn.recording { background: var(--danger); animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
         }
-        .loading-progress {
-            height: 6px;
-            width: 0%;
-            background: var(--primary);
-            position: absolute;
-            top: 0; left: 0;
+
+        #transcript-view {
+            margin-top: 25px;
+            font-size: 1em;
+            color: #475569;
+            min-height: 25px;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 15px;
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div id="status-badge">جاري تهيئة الذكاء الاصطناعي...</div>
-    
-    <div id="display-text">
+    <div id="status-container">
+        <div id="status-text">جاري استدعاء الذكاء الاصطناعي (Whisper Base)...</div>
+        <div class="progress-wrapper" id="progress-wrapper">
+            <div id="progress-bar"></div>
         </div>
+    </div>
 
-    <button id="record-btn" disabled>انتظر التحميل...</button>
+    <div id="display-text"></div>
+
+    <button id="record-btn" disabled>انتظر تحميل المحرك...</button>
     
-    <div id="live-transcript">تحدث ليظهر نصك هنا...</div>
+    <div id="transcript-view"></div>
 </div>
 
 <script type="module">
     import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
 
-    const originalSentence = "الحلم هو بداية كل انجاز عظيم";
-    const wordsArray = originalSentence.split(' ');
+    // النص المراد قراءته
+    const targetSentence = "الحلم هو بداية كل انجاز عظيم";
+    const wordsArray = targetSentence.split(' ');
     
-    const displayContainer = document.getElementById('display-text');
+    const displayText = document.getElementById('display-text');
     const recordBtn = document.getElementById('record-btn');
-    const statusBadge = document.getElementById('status-badge');
-    const liveTranscript = document.getElementById('live-transcript');
+    const statusText = document.getElementById('status-text');
+    const progressBar = document.getElementById('progress-bar');
+    const progressWrapper = document.getElementById('progress-wrapper');
+    const transcriptView = document.getElementById('transcript-view');
 
     let transcriber;
     let isRecording = false;
 
-    // 1. عرض النص مقسماً لكلمات
-    wordsArray.forEach((word, index) => {
+    // تهيئة عرض الكلمات
+    wordsArray.forEach((word, i) => {
         const span = document.createElement('span');
         span.innerText = word;
-        span.classList.add('word');
-        span.id = `word-${index}`;
-        displayContainer.appendChild(span);
+        span.className = 'word';
+        span.id = `w-${i}`;
+        displayText.appendChild(span);
     });
 
-    // 2. تحميل المحرك
-    async function initAI() {
+    // تحميل المحرك العالي الدقة (Base)
+    async function loadEngine() {
+        progressWrapper.style.display = 'block';
         try {
-            transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
-                device: 'webgpu', // يحاول استخدام المعالج الرسومي للسرعة اللحظية
+            // استخدام النسخة base التي تدعم العربية بشكل أفضل بمراحل
+            transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base', {
+                progress_callback: (p) => {
+                    if (p.status === 'progress') {
+                        progressBar.style.width = p.progress + '%';
+                        statusText.innerText = `جاري تحميل الدماغ الآلي: ${Math.round(p.progress)}%`;
+                    }
+                    if (p.status === 'ready') {
+                        statusText.innerText = "✅ المحرك القوي جاهز للعمل";
+                        statusText.style.color = "#16a34a";
+                        recordBtn.disabled = false;
+                        recordBtn.innerText = "ابدأ القراءة";
+                        progressWrapper.style.display = 'none';
+                    }
+                }
             });
-            statusBadge.innerText = "✅ المحرك جاهز للتقييم اللحظي";
-            statusBadge.style.background = "#dcfce7";
-            statusBadge.style.color = "#166534";
-            recordBtn.disabled = false;
-            recordBtn.innerText = "ابدأ القراءة الآن";
         } catch (e) {
-            statusBadge.innerText = "⚠️ وضع التوافق (أبطأ قليلاً)";
-            transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny');
-            recordBtn.disabled = false;
+            statusText.innerText = "❌ حدث خطأ أثناء التحميل. تأكد من اتصال الإنترنت.";
         }
     }
-    initAI();
+    loadEngine();
 
-    // 3. منطق التسجيل والمقارنة اللحظية
     let mediaRecorder;
     recordBtn.onclick = async () => {
         if (isRecording) {
@@ -150,67 +178,74 @@
         mediaRecorder = new MediaRecorder(stream);
         let audioChunks = [];
 
-        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-        
         mediaRecorder.onstart = () => {
             isRecording = true;
-            recordBtn.innerText = "توقف";
-            recordBtn.style.background = "#ef4444";
-            resetColors();
+            recordBtn.innerText = "اسمعك.. اضغط عند الانتهاء";
+            recordBtn.classList.add('recording');
+            resetWords();
         };
 
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        
         mediaRecorder.onstop = async () => {
             isRecording = false;
-            recordBtn.innerText = "تحليل نهائي...";
+            recordBtn.innerText = "جاري التقييم الاحترافي...";
+            recordBtn.classList.remove('recording');
+            recordBtn.disabled = true;
+
             const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
             const audioUrl = URL.createObjectURL(audioBlob);
             
-            // معالجة النص
+            // معالجة الصوت بالنموذج الأقوى
             const output = await transcriber(audioUrl, { 
                 language: 'arabic',
-                task: 'transcribe',
-                chunk_length_s: 30,
-                stride_length_s: 5
+                task: 'transcribe'
             });
 
-            evaluateOutput(output.text);
-            recordBtn.innerText = "إعادة المحاولة";
-            recordBtn.style.background = "#2563eb";
-            recordBtn.disabled = false;
+            processFinalResult(output.text);
         };
 
         mediaRecorder.start();
     };
 
-    function evaluateOutput(text) {
-        liveTranscript.innerText = "سمعت: " + text;
-        const spokenWords = text.trim().split(/\s+/);
+    function processFinalResult(rawText) {
+        transcriptView.innerHTML = `سمعت: <span style="color:var(--primary)">"${rawText}"</span>`;
+        
+        const spokenWords = normalizeText(rawText).split(/\s+/);
         
         wordsArray.forEach((originalWord, index) => {
-            const wordElement = document.getElementById(`word-${index}`);
-            const normalizedOriginal = normalize(originalWord);
+            const wordEl = document.getElementById(`w-${index}`);
+            const normOriginal = normalizeText(originalWord);
             
-            // البحث عن الكلمة في النص المسموع
-            const found = spokenWords.some(sw => normalize(sw).includes(normalizedOriginal) || normalizedOriginal.includes(normalize(sw)));
+            // البحث عن تطابق أو تقارب (Fuzzy Match)
+            const isMatch = spokenWords.some(sw => {
+                const s = normalizeText(sw);
+                return s === normOriginal || s.includes(normOriginal) || normOriginal.includes(s);
+            });
 
-            if (found) {
-                wordElement.classList.add('correct');
-                wordElement.classList.remove('wrong');
+            if (isMatch) {
+                wordEl.classList.add('correct');
             } else {
-                wordElement.classList.add('wrong');
-                wordElement.classList.remove('correct');
+                wordEl.classList.add('wrong');
             }
         });
+
+        recordBtn.disabled = false;
+        recordBtn.innerText = "حاول مرة أخرى";
     }
 
-    function normalize(txt) {
-        return txt.replace(/[إأآا]/g, "ا").replace(/ة/g, "ه").replace(/[^\u0621-\u064A]/g, "");
+    function normalizeText(t) {
+        return t.toLowerCase()
+                .replace(/[إأآا]/g, "ا")
+                .replace(/ة/g, "ه")
+                .replace(/ى/g, "ي")
+                .replace(/[^\u0621-\u064A]/g, "") // حذف كل الرموز غير العربية
+                .trim();
     }
 
-    function resetColors() {
-        document.querySelectorAll('.word').forEach(w => {
-            w.classList.remove('correct', 'wrong', 'active');
-        });
+    function resetWords() {
+        document.querySelectorAll('.word').forEach(w => w.className = 'word');
+        transcriptView.innerText = "";
     }
 </script>
 
