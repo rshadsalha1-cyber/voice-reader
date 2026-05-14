@@ -1,0 +1,193 @@
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مقيم القراءة بذكاء اصطناعي مستقل</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --bg: #f0f2f5;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        h2 { color: #333; margin-bottom: 20px; }
+        #status {
+            font-size: 0.9em;
+            margin-bottom: 15px;
+            color: #666;
+            padding: 10px;
+            border-radius: 8px;
+            background: #eee;
+        }
+        #original-text {
+            font-size: 1.5em;
+            color: #2c3e50;
+            background: #fff9c4;
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid #ffe082;
+            margin-bottom: 25px;
+        }
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+        button:active { transform: scale(0.98); }
+        #result-area {
+            margin-top: 25px;
+            line-height: 1.6;
+        }
+        .correct { color: var(--success); font-weight: bold; }
+        .wrong { color: var(--danger); font-weight: bold; }
+        .loading-bar {
+            height: 5px;
+            width: 0%;
+            background: var(--primary);
+            margin-top: 10px;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>مقيم القراءة الذكي</h2>
+    
+    <div id="status">جاري تشغيل محرك الذكاء الاصطناعي...</div>
+    <div id="progress" class="loading-bar"></div>
+    
+    <div id="original-text">الحلم هو بداية كل إنجاز عظيم</div>
+
+    <button id="record-btn" disabled>انتظر تحميل النموذج...</button>
+    
+    <div id="result-area"></div>
+</div>
+
+<script type="module">
+    // استيراد مكتبة Transformers.js للعمل أوفلاين
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
+
+    let transcriber;
+    const status = document.getElementById('status');
+    const recordBtn = document.getElementById('record-btn');
+    const resultArea = document.getElementById('result-area');
+    const progress = document.getElementById('progress');
+    const originalText = document.getElementById('original-text').innerText;
+
+    // 1. إعداد المحرك وتحميل النموذج
+    async function init() {
+        try {
+            // استخدام نموذج Whisper Tiny (أصغر وأسرع نسخة للمتصفح)
+            transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+                progress_callback: (p) => {
+                    if(p.status === 'progress') {
+                        progress.style.width = p.progress + '%';
+                        status.innerText = `جاري التحميل: ${Math.round(p.progress)}%`;
+                    }
+                }
+            });
+            
+            status.innerText = "✅ المحرك جاهز! يمكنك القراءة الآن.";
+            status.style.background = "#d4edda";
+            recordBtn.disabled = false;
+            recordBtn.innerText = "ابدأ التسجيل";
+            progress.style.display = 'none';
+        } catch (err) {
+            status.innerText = "❌ فشل التحميل. يرجى تحديث الصفحة.";
+            console.error(err);
+        }
+    }
+
+    init();
+
+    // 2. إدارة تسجيل الصوت
+    let mediaRecorder;
+    let audioChunks = [];
+
+    recordBtn.onclick = async () => {
+        if (mediaRecorder && mediaRecorder.state === "recording") {
+            mediaRecorder.stop();
+            recordBtn.innerText = "جاري تحليل صوتك...";
+            recordBtn.disabled = true;
+            return;
+        }
+
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // تحويل الصوت إلى نص باستخدام AI
+                const output = await transcriber(audioUrl, { 
+                    language: 'arabic',
+                    task: 'transcribe' 
+                });
+
+                compareResults(output.text);
+            };
+
+            mediaRecorder.start();
+            recordBtn.innerText = "توقف (اضغط عند الانتهاء)";
+        } catch (err) {
+            alert("يرجى تفعيل صلاحية الميكروفون.");
+        }
+    };
+
+    // 3. دالة المقارنة
+    function compareResults(spokenText) {
+        // تنظيف النص من الحركات وعلامات الترقيم (بشكل مبسط)
+        const clean = (txt) => txt.replace(/[^\u0621-\u064A\s]/g, '').trim();
+        
+        const spoken = clean(spokenText);
+        const original = clean(originalText);
+
+        let feedback = `<p>سمعتك تقول: "<strong>${spokenText}</strong>"</p>`;
+        
+        if (spoken === original || spoken.includes(original)) {
+            feedback += `<p class="correct">✅ أحسنت! قراءة صحيحة تماماً.</p>`;
+        } else {
+            feedback += `<p class="wrong">❌ هناك اختلاف بسيط، حاول نطق الكلمات بوضوح أكثر.</p>`;
+        }
+
+        resultArea.innerHTML = feedback;
+        recordBtn.disabled = false;
+        recordBtn.innerText = "إعادة المحاولة";
+    }
+</script>
+
+</body>
+</html>
